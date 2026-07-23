@@ -14,6 +14,10 @@ LANGUAGES_ARRAY=($(echo $LANGUAGES | tr ',' ' '))
 : ${WIKIMEDIA_HOST:=wikidata.aerotechnet.com}
 # See list on https://wikidata.aerotechnet.com/enwiki/
 : ${WIKIPEDIA_DATE:=20220620}
+# An empty download usually means the mirror has not synced that file yet.
+# Retry a few times before giving up.
+: ${DOWNLOAD_MAX_ATTEMPTS:=5}
+: ${DOWNLOAD_RETRY_WAIT:=3600} # 1 hour, to give the mirror time to sync
 
 DOWNLOADED_PATH="$BUILDID/downloaded/wikipedia"
 
@@ -24,13 +28,23 @@ download() {
         return
     fi
     header='--header=User-Agent:Osm-search-Bot/1(https://github.com/osm-search/wikipedia-wikidata)'
-    wget -O "$2" --quiet $header --no-clobber --tries=3 "$1"
-    if [ ! -s "$2" ]; then
-        echo "downloaded file $2 is empty, please retry later"
+
+    for attempt in $(seq 1 "$DOWNLOAD_MAX_ATTEMPTS"); do
+        wget -O "$2" --quiet $header --no-clobber --tries=3 "$1"
+        if [ -s "$2" ]; then
+            du -h "$2" | cut -f1
+            return
+        fi
+        echo "downloaded file $2 is empty (attempt $attempt/$DOWNLOAD_MAX_ATTEMPTS)"
         rm -f "$2"
-        exit 1
-    fi
-    du -h "$2" | cut -f1
+        if [ "$attempt" -lt "$DOWNLOAD_MAX_ATTEMPTS" ]; then
+            echo "mirror may not have synced this file yet, retrying in ${DOWNLOAD_RETRY_WAIT}s ..."
+            sleep "$DOWNLOAD_RETRY_WAIT"
+        fi
+    done
+
+    echo "downloaded file $2 is still empty after $DOWNLOAD_MAX_ATTEMPTS attempts, giving up"
+    exit 1
 }
 
 for WIKILANG in "${LANGUAGES_ARRAY[@]}"; do
