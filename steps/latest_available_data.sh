@@ -157,7 +157,7 @@ check_all_files_ready() {
 }
 
 # Find dates in directory names. We need to parse HTML.
-CONTENT=$(curl -s -S --fail "https://$WIKIMEDIA_HOST/enwiki/")
+CONTENT=$(curl -s -S --fail -A "$USER_AGENT" "https://$WIKIMEDIA_HOST/enwiki/")
 for DATE in $(echo $CONTENT | grep -oE '20[0-9]{6}' | sort -nr); do
     if check_all_files_ready $DATE; then
         echo "$DATE"
